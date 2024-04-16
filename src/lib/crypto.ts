@@ -26,7 +26,7 @@ export async function deriveKey(password: string, salt?: Uint8Array) {
 
 export async function encryptMessage(key: CryptoKey, message: string) {
   const encoder = new TextEncoder();
-  const iv = window.crypto.getRandomValues(new Uint8Array(12)); // Generate a random IV
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
   const encodedMessage = encoder.encode(message);
 
   const ciphertext = await window.crypto.subtle.encrypt(
@@ -73,21 +73,19 @@ export async function decryptMessage(
     console.log("Decrypted message:", decrypted);
     return decoder.decode(decrypted);
   } catch (e) {
-    // console.error("Decryption failed", e);
-    console.error(e);
+    console.error("Decryption failed", e);
+
     return null;
   }
 }
 
-// Example function to handle the decryption process
-
 // Base64 to ArrayBuffer conversion function
 export function base64ToArrayBuffer(base64: string) {
-  const binary_string = window.atob(base64);
-  const len = binary_string.length;
+  const binaryString = window.atob(base64);
+  const len = binaryString.length;
   let bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) {
-    bytes[i] = binary_string.charCodeAt(i);
+    bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes.buffer;
 }

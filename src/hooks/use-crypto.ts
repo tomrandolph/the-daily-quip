@@ -57,11 +57,11 @@ export const useDecryption = (message: string) => {
       if (!password) {
         throw new Error("Password not set");
       }
-      const binary_string = window.atob(saltBase64);
-      const len = binary_string.length;
+      const binaryString = window.atob(saltBase64);
+      const len = binaryString.length;
       const bytes = new Uint8Array(len);
       for (let i = 0; i < len; i++) {
-        bytes[i] = binary_string.charCodeAt(i);
+        bytes[i] = binaryString.charCodeAt(i);
       }
 
       const { key: k } = await deriveKey(password, bytes);
