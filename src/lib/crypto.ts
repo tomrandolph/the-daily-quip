@@ -1,6 +1,6 @@
 export async function deriveKey(password: string, salt?: Uint8Array) {
   const encoder = new TextEncoder();
-  salt = salt ?? window.crypto.getRandomValues(new Uint8Array(16)); // Generate a random salt
+  salt = salt ?? window.crypto.getRandomValues(new Uint8Array(16));
   const keyMaterial = await window.crypto.subtle.importKey(
     "raw",
     encoder.encode(password),
