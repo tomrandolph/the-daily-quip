@@ -140,6 +140,7 @@ const startGameSchema = z.object({
   gameId: z.number({ coerce: true }).int().gte(0),
 });
 export const startGame = handleFormData(startGameSchema, async (parse) => {
+  console.log("attempting to start game");
   const playerId = await auth();
   if (!playerId) {
     return {
