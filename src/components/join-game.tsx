@@ -7,7 +7,7 @@ import { Label } from "./ui/label";
 import { joinGame } from "@/actions/game";
 import { useState } from "react";
 
-export const JoinGameForm = ({ gameId }: { gameId: string }) => {
+export const JoinGameForm = ({ gameId }: { gameId: number }) => {
   const [state, action] = useFormState(joinGame, undefined);
 
   const errors = state?.errors;
@@ -38,7 +38,7 @@ export const JoinGameForm = ({ gameId }: { gameId: string }) => {
   );
 };
 
-export const CopyGameLinkButton = ({ gameId }: { gameId: string }) => {
+export const CopyGameLinkButton = () => {
   return (
     <Button
       variant={"secondary"}

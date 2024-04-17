@@ -4,7 +4,7 @@ import { Button } from "./ui/button";
 import { useState } from "react";
 import { useFormState } from "react-dom";
 
-export function StartGameButton({ gameId }: { gameId: string }) {
+export function StartGameButton({ gameId }: { gameId: number }) {
   const [state, action] = useFormState(startGame, undefined);
   console.log(state);
   return (

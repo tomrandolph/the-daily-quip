@@ -5,33 +5,48 @@ import { StartGameButton } from "@/components/start-game";
 import { SubmitQuipForm } from "@/components/submit-quip";
 import { Button } from "@/components/ui/button";
 import { sql } from "@/db/db";
-import { cookies } from "next/headers";
+import { auth } from "@/lib/auth";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-export default async function Page({ params }: { params: { gameId: string } }) {
-  console.log("gameId", params.gameId);
-  const playerId = cookies().get("player-id")?.value; // TODO jwt
-  const res = await sql`SELECT *
-  FROM games
-  WHERE games.id = ${params.gameId}`;
-  if (!res.rowCount) {
-    notFound();
+export default async function Page({ params }: { params: { gameId: number } }) {
+  const playerId = await auth();
+  if (!playerId) {
+    console.error("no player id");
   }
 
-  const player = (
-    await sql`SELECT players.name
+  return (
+    <main className="px-8 flex flex-col gap-2">
+      {!playerId ? (
+        <div className="flex flex-col gap-8 w-full">
+          <>
+            <p>Join the game</p>
+            <JoinGameForm gameId={params.gameId} />
+          </>
+        </div>
+      ) : (
+        <AuthorizedGame playerId={playerId} />
+      )}
+    </main>
+  );
+}
+
+async function AuthorizedGame({ playerId }: { playerId: number }) {
+  const info = (
+    await sql`SELECT games.id as game_id, players.name as player_name
   FROM games
   INNER JOIN players ON games.id = players.game_id
-  WHERE games.id = ${params.gameId}
-  AND players.id = ${playerId}`
-  ).rows[0] as { name: string } | undefined;
-
+  WHERE players.id = ${playerId}`
+  ).rows[0] as { game_id: number; player_name: string } | undefined;
+  console.log("info", info);
+  if (!info) {
+    return "Something went wrong finding your game";
+  }
   const totalSubmissions = (
     await sql`SELECT *
   FROM submissions
   INNER JOIN players ON submissions.player_id = players.id
-  WHERE game_id = ${params.gameId}`
+  WHERE game_id = ${info.game_id}`
   ).rowCount;
   const gameStarted = totalSubmissions > 0;
   const gameCompleted =
@@ -39,7 +54,7 @@ export default async function Page({ params }: { params: { gameId: string } }) {
       await sql`SELECT *
   FROM submissions
   INNER JOIN players ON submissions.player_id = players.id
-  WHERE game_id = ${params.gameId}
+  WHERE game_id = ${info.game_id}
   AND content IS NOT NULL`
     ).rowCount == totalSubmissions && gameStarted;
 
@@ -52,17 +67,15 @@ export default async function Page({ params }: { params: { gameId: string } }) {
       LIMIT 1
   `
   ).rows[0] as Submission | undefined;
+
   const STATES = {
-    NOT_JOINED: "NOT_JOINED",
     NOT_STARTED: "NOT_STARTED",
     PLAYER_PLAYING: "PLAYER_PLAYING",
     PLAYER_DONE: "PLAYER_DONE",
     COMPLETED: "COMPLETED",
   } as const;
 
-  const STATE = !player
-    ? STATES.NOT_JOINED
-    : gameCompleted
+  const STATE = gameCompleted
     ? STATES.COMPLETED
     : gameStarted
     ? nextSubmission
@@ -71,23 +84,17 @@ export default async function Page({ params }: { params: { gameId: string } }) {
     : STATES.NOT_STARTED;
 
   const game = {
-    [STATES.NOT_JOINED]: () => (
-      <>
-        <p>Join the game</p>
-        <JoinGameForm gameId={params.gameId} />
-      </>
-    ),
-    [STATES.NOT_STARTED]: () => <StartGameButton gameId={params.gameId} />,
+    [STATES.NOT_STARTED]: () => <StartGameButton gameId={info.game_id} />,
     [STATES.PLAYER_PLAYING]: () => <PlayQuip submission={nextSubmission!} />,
     [STATES.PLAYER_DONE]: () => (
-      <Link href={`/games/${params.gameId}`}>
+      <Link href={`/games/${info.game_id}`}>
         You completed your prompts. Click here to check out the other
         submissions
       </Link>
     ),
     [STATES.COMPLETED]: () => (
       <>
-        <Submissions gameId={params.gameId} />
+        <Submissions gameId={info.game_id} />
         <Link href="/new-game">
           <Button>New Game</Button>
         </Link>
@@ -96,19 +103,17 @@ export default async function Page({ params }: { params: { gameId: string } }) {
   } as const;
   const Game = game[STATE];
   return (
-    <main className="px-8 flex flex-col gap-2">
-      <div className="flex gap-8 w-full justify-between">
-        {STATE !== STATES.NOT_JOINED && (
-          <GamePlayersList gameId={params.gameId} />
-        )}
-        {STATE === STATES.NOT_STARTED && (
-          <CopyGameLinkButton gameId={params.gameId} />
-        )}
+    <div className="flex flex-col justify-center w-full">
+      <h1>Game</h1>
+      <div className="flex justify-between">
+        <GamePlayersList gameId={info.game_id} />
+        {STATE === STATES.NOT_STARTED && <CopyGameLinkButton />}
       </div>
       <Game />
-    </main>
+    </div>
   );
 }
+
 type Submission = {
   content: string | null;
   prompt_content: string;
@@ -128,10 +133,11 @@ async function PlayQuip({ submission }: { submission: Submission }) {
   );
 }
 
-async function GamePlayersList({ gameId }: { gameId: string }) {
+async function GamePlayersList({ gameId }: { gameId: number }) {
   const res = await sql`SELECT players.name
   FROM players
   WHERE players.game_id = ${gameId}`;
+  console.log("gameId", gameId);
   return (
     <ul className="flex gap-2">
       {res.rows.map((row) => (
@@ -141,7 +147,7 @@ async function GamePlayersList({ gameId }: { gameId: string }) {
   );
 }
 
-async function Submissions({ gameId }: { gameId: string }) {
+async function Submissions({ gameId }: { gameId: number }) {
   const res = (
     await sql`SELECT players.name, submissions.content, prompts.content as prompt_content
   FROM players

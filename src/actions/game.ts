@@ -6,6 +6,7 @@ import bcrypt from "bcrypt";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { auth, issueJWT } from "@/lib/auth";
 
 const gameSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters long"),
@@ -75,27 +76,27 @@ export const joinGame = handleFormData(joinGameSchema, async (parse) => {
       errors: { other: "Game not found or invalid password" },
     };
   }
-  console.log("game", game, "password", password + game.salt, "name", name);
 
   const isValid = await bcrypt.compare(password, game.password);
 
   if (!isValid) {
     return {
-      errors: { other: "Game not found or invalid password" },
+      errors: { other: "Game not found or invalid password" }, // TODO can we just 404 instead?
     };
   }
 
   const player = (
     await sql`INSERT INTO players (name, game_id) VALUES (${name}, ${gameId}) RETURNING id`
-  ).rows[0] as { id: string };
+  ).rows[0] as { id: number };
 
+  const jwt = await issueJWT(player.id);
   cookies().set({
-    name: "player-id",
-    value: player.id,
+    name: "player-jwt",
+    value: jwt,
     httpOnly: true,
     path: "/", // TODO what is this
   });
-  console.log("cookies", cookies());
+
   revalidatePath(`/games/${game.id}`);
 });
 
@@ -106,6 +107,12 @@ const submitQuipSchema = z.object({
 });
 
 export const submitQuip = handleFormData(submitQuipSchema, async (parse) => {
+  const playerId = await auth();
+  if (!playerId) {
+    return {
+      errors: { other: "Not logged in" },
+    };
+  }
   const { data, errors } = parse();
   if (errors) {
     return { errors };
@@ -113,7 +120,6 @@ export const submitQuip = handleFormData(submitQuipSchema, async (parse) => {
 
   const { text, playerId: pid, promptId } = data;
 
-  const playerId = Number(cookies().get("player-id")?.value);
   const { id, game_id } = (
     await sql`SELECT * FROM players WHERE id = ${playerId}`
   ).rows[0] as { game_id: number; id: number };
@@ -134,6 +140,12 @@ const startGameSchema = z.object({
   gameId: z.number({ coerce: true }).int().gte(0),
 });
 export const startGame = handleFormData(startGameSchema, async (parse) => {
+  const playerId = await auth();
+  if (!playerId) {
+    return {
+      errors: { other: "Not logged in" },
+    };
+  }
   const { data, errors } = parse();
   if (errors) {
     return { errors };
@@ -199,13 +211,3 @@ INSERT INTO submissions (player_id, prompt_id) (
 );`;
   revalidatePath(`/games/${gameId}`);
 });
-
-export async function inputAnswer(roundId: number) {
-  const user = cookies().get("player-id")?.value;
-  if (!user) {
-    return {
-      errors: { other: "Not logged in" },
-    };
-  }
-  await sql`INSERT INTO rounds `;
-}
