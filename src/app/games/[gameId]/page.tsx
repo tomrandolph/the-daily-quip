@@ -97,12 +97,14 @@ export default async function Page({ params }: { params: { gameId: string } }) {
   const Game = game[STATE];
   return (
     <main className="px-8 flex flex-col gap-2">
-      {STATE !== STATES.NOT_JOINED && (
-        <div className="flex gap-8 w-full justify-between">
+      <div className="flex gap-8 w-full justify-between">
+        {STATE !== STATES.NOT_JOINED && (
           <GamePlayersList gameId={params.gameId} />
+        )}
+        {STATE === STATES.NOT_STARTED && (
           <CopyGameLinkButton gameId={params.gameId} />
-        </div>
-      )}
+        )}
+      </div>
       <Game />
     </main>
   );
