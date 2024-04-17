@@ -28,7 +28,6 @@ export const createGame = handleFormData(gameSchema, async (parse) => {
 
   // Hash the password using the generated salt
   const hashedPassword = await bcrypt.hash(password, salt);
-  console.log("hashedPassword", hashedPassword, "salt", salt);
   // Store the hashed password securely
   const res = (
     await sql`INSERT INTO games (password, salt) VALUES (${hashedPassword}, ${salt}) RETURNING id`
@@ -109,3 +108,75 @@ export const submitQuip = handleFormData(submitQuipSchema, async (parse) => {
   await sql`INSERT INTO submissions (content, game_id, player_id) VALUES (${text}, ${gameId}, ${playerId})`;
   revalidatePath(`/games/${gameId}`);
 });
+
+export async function startGame(gameId: string) {
+  const gameExists =
+    (await sql`SELECT * FROM games WHERE id = ${gameId}`).rowCount === 1;
+  if (!gameExists) {
+    console.error("Game does not exist");
+    return;
+  }
+
+  const players =
+    await sql`SELECT * FROM game_players WHERE game_id = ${gameId}`;
+  const playerCount = players.rowCount;
+  if (playerCount < 3) {
+    console.error("Not enough players");
+    return;
+  }
+  const submissions =
+    await sql`SELECT * FROM submissions WHERE game_id = ${gameId}`;
+  if (submissions.rowCount > 0) {
+    console.error("Game already started");
+    return;
+  }
+
+  await sql`
+  WITH matched_player_1 AS (
+    SELECT
+        player_id,
+        (ROW_NUMBER() OVER (ORDER BY player_id)-1) AS round
+    FROM
+        game_players
+    WHERE game_id = ${gameId}
+), matched_player_2 AS (
+    SELECT
+        player_id,
+        (ROW_NUMBER() OVER (ORDER BY player_id) % ( COUNT(*) OVER ())) AS round
+
+    FROM
+        game_players
+    WHERE game_id = ${gameId}
+), random_prompts AS (
+    SELECT
+        id,
+        (ROW_NUMBER() OVER (ORDER BY RANDOM())-1) AS round
+    FROM
+        prompts
+), player_matches AS (
+    SELECT *
+    FROM matched_player_1
+    UNION
+    SELECT *
+    FROM matched_player_2
+)
+INSERT INTO submissions (game_id, player_id, prompt_id) (
+    SELECT
+        ${gameId} as game_id,
+        player_id,
+        random_prompts.id as prompt_id
+    FROM player_matches
+    LEFT JOIN random_prompts ON player_matches.round = random_prompts.round
+);`;
+  revalidatePath(`/games/${gameId}`);
+}
+
+export async function inputAnswer(roundId: number) {
+  const user = cookies().get("player-id")?.value;
+  if (!user) {
+    return {
+      errors: { other: "Not logged in" },
+    };
+  }
+  await sql`INSERT INTO rounds `;
+}

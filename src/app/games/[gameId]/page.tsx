@@ -1,6 +1,9 @@
+import { startGame } from "@/actions/game";
 import { JoinGameForm } from "@/components/join-game";
 import { SumissionList } from "@/components/list-submissions";
+import { StartGameButton } from "@/components/start-game";
 import { SubmitQuipForm } from "@/components/submit-quip";
+import { Button } from "@/components/ui/button";
 import { sql } from "@/db/db";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -25,6 +28,19 @@ export default async function Page({ params }: { params: { gameId: string } }) {
   AND game_players.player_id = ${playerId}`
   ).rows[0] as { name: string } | undefined;
 
+  const totalSubmissions = (
+    await sql`SELECT *
+  FROM submissions
+  WHERE game_id = ${params.gameId}`
+  ).rowCount;
+  const gameStarted = totalSubmissions > 0;
+  const gameCompleted =
+    (
+      await sql`SELECT *
+  FROM submissions
+  WHERE game_id = ${params.gameId}
+  AND content IS NOT NULL`
+    ).rowCount == totalSubmissions && gameStarted;
   return (
     <div>
       <h1>Session {params.gameId}</h1>
@@ -32,8 +48,16 @@ export default async function Page({ params }: { params: { gameId: string } }) {
         <div>
           <p>Welcome back, {player.name}</p>
           <GamePlayersList gameId={params.gameId} />
-          <Submissions gameId={params.gameId} />
-          <SubmitQuipForm gameId={params.gameId} />
+          <SubmissionsList gameId={params.gameId} />
+          {gameCompleted && "Game completed"}
+          {gameStarted ? (
+            <>
+              {/* <Submissions gameId={params.gameId} /> */}
+              <SubmitQuipForm gameId={params.gameId} />
+            </>
+          ) : (
+            <StartGameButton gameId={params.gameId} />
+          )}
         </div>
       ) : (
         <>
@@ -55,6 +79,22 @@ async function GamePlayersList({ gameId }: { gameId: string }) {
     <ul>
       {res.rows.map((row) => (
         <li key={row.name}>{row.name}</li>
+      ))}
+    </ul>
+  );
+}
+
+async function SubmissionsList({ gameId }: { gameId: string }) {
+  const res =
+    await sql`SELECT players.name, prompts.content AS prompt, submissions.content as submission
+  FROM submissions
+  INNER JOIN prompts ON submissions.prompt_id = prompts.id
+  INNER JOIN players ON submissions.player_id = players.id
+  WHERE game_id = ${gameId}`;
+  return (
+    <ul>
+      {res.rows.map((row, i) => (
+        <li key={i}>{JSON.stringify(row)}</li>
       ))}
     </ul>
   );

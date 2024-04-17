@@ -1,30 +1,37 @@
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS games (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id SERIAL PRIMARY KEY,
   password TEXT NOT NULL,
   salt TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS players (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS game_players (
-  game_id uuid REFERENCES games(id),
-  player_id uuid REFERENCES players(id),
+  game_id INTEGER REFERENCES games(id),
+  player_id INTEGER REFERENCES players(id),
+  joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (game_id, player_id)
 );
 
-CREATE TABLE IF NOT EXISTS submissions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  game_id uuid REFERENCES games(id),
-  player_id uuid REFERENCES players(id),
-  content TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS prompts (
+  id SERIAL PRIMARY KEY,
+  content TEXT NOT NULL UNIQUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS submissions (
+  id SERIAL PRIMARY KEY, -- NEEDED?
+  game_id INTEGER NOT NULL REFERENCES games(id),
+  prompt_id INTEGER NOT NULL REFERENCES prompts(id),
+  player_id INTEGER NOT NULL REFERENCES players(id),
+  content TEXT
 );
 
 COMMIT;
