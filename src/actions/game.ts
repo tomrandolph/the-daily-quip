@@ -6,7 +6,7 @@ import bcrypt from "bcrypt";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { auth, issueJWT } from "@/lib/auth";
+import { COOKIE_NAME, auth, issueJWT } from "@/lib/auth";
 
 const gameSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters long"),
@@ -33,6 +33,9 @@ export const createGame = handleFormData(gameSchema, async (parse) => {
   const res = (
     await sql`INSERT INTO games (password, salt) VALUES (${hashedPassword}, ${salt}) RETURNING id`
   ).rows[0] as { id: string };
+  // TODO ensure player does not leave games stranded
+  cookies().delete(COOKIE_NAME);
+
   redirect(`/games/${res.id}`);
 });
 
@@ -91,7 +94,7 @@ export const joinGame = handleFormData(joinGameSchema, async (parse) => {
 
   const jwt = await issueJWT(player.id);
   cookies().set({
-    name: "player-jwt",
+    name: COOKIE_NAME,
     value: jwt,
     httpOnly: true,
     path: "/", // TODO what is this
@@ -103,7 +106,6 @@ export const joinGame = handleFormData(joinGameSchema, async (parse) => {
 const submitQuipSchema = z.object({
   text: z.string(),
   promptId: z.number({ coerce: true }).int().gte(0),
-  playerId: z.number({ coerce: true }).int().gte(0),
 });
 
 export const submitQuip = handleFormData(submitQuipSchema, async (parse) => {
@@ -118,17 +120,10 @@ export const submitQuip = handleFormData(submitQuipSchema, async (parse) => {
     return { errors };
   }
 
-  const { text, playerId: pid, promptId } = data;
+  const { text, promptId } = data;
 
-  const { id, game_id } = (
-    await sql`SELECT * FROM players WHERE id = ${playerId}`
-  ).rows[0] as { game_id: number; id: number };
-  if (!playerId || playerId != pid || id != playerId) {
-    console.error("Not logged in", playerId, pid, id);
-    return {
-      errors: { other: "Not logged in" },
-    };
-  }
+  const { game_id } = (await sql`SELECT * FROM players WHERE id = ${playerId}`)
+    .rows[0] as { game_id: number };
 
   await sql`UPDATE submissions set content = ${text} WHERE player_id = ${playerId} AND prompt_id = ${promptId}`;
   revalidatePath(`/games/${game_id}`);

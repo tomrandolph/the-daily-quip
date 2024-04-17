@@ -1,6 +1,7 @@
 import * as jose from "jose";
 import { cookies } from "next/headers";
 const ALG = "HS256";
+export const COOKIE_NAME = "player-jwt";
 export async function issueJWT(playerId: number) {
   const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 
@@ -24,7 +25,7 @@ export async function verifyJWT(jwt: string) {
 }
 
 export async function auth(): Promise<number | null> {
-  const jwt = cookies().get("player-jwt")?.value;
+  const jwt = cookies().get(COOKIE_NAME)?.value;
   if (!jwt) {
     return null;
   }

@@ -125,10 +125,7 @@ async function PlayQuip({ submission }: { submission: Submission }) {
   return (
     <div>
       <p>{submission.prompt_content}</p>
-      <SubmitQuipForm
-        playerId={submission.player_id}
-        promptId={submission.prompt_id}
-      />
+      <SubmitQuipForm promptId={submission.prompt_id} />
     </div>
   );
 }
