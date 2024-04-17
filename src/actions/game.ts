@@ -53,10 +53,23 @@ export const joinGame = handleFormData(joinGameSchema, async (parse) => {
     return { errors };
   }
 
-  const { password, name } = data;
+  const gameStarted =
+    (
+      await sql`SELECT *
+      FROM submissions
+      INNER JOIN players ON submissions.player_id = players.id
+      WHERE game_id = ${data.gameId}`
+    ).rowCount > 0;
+  if (gameStarted) {
+    console.error("Game already started");
+    return { errors: { other: "Game already started" } };
+  }
 
-  const game = (await sql`SELECT * FROM games WHERE id = ${data.gameId}`)
-    .rows[0] as { id: string; salt: string; password: string } | undefined;
+  const { password, name, gameId } = data;
+
+  const game = (await sql`SELECT * FROM games WHERE id = ${gameId}`).rows[0] as
+    | { id: string; salt: string; password: string }
+    | undefined;
   if (!game) {
     return {
       errors: { other: "Game not found or invalid password" },
@@ -71,10 +84,11 @@ export const joinGame = handleFormData(joinGameSchema, async (parse) => {
       errors: { other: "Game not found or invalid password" },
     };
   }
+
   const player = (
-    await sql`INSERT INTO players (name) VALUES (${name}) RETURNING id`
+    await sql`INSERT INTO players (name, game_id) VALUES (${name}, ${gameId}) RETURNING id`
   ).rows[0] as { id: string };
-  await sql`INSERT INTO game_players (game_id, player_id) VALUES (${game.id}, ${player.id})`;
+
   cookies().set({
     name: "player-id",
     value: player.id,
@@ -86,8 +100,9 @@ export const joinGame = handleFormData(joinGameSchema, async (parse) => {
 });
 
 const submitQuipSchema = z.object({
-  text: z.string().min(1, "Quip must be at least 1 characters long"),
-  gameId: z.string(),
+  text: z.string(),
+  promptId: z.number({ coerce: true }).int().gte(0),
+  playerId: z.number({ coerce: true }).int().gte(0),
 });
 
 export const submitQuip = handleFormData(submitQuipSchema, async (parse) => {
@@ -96,56 +111,71 @@ export const submitQuip = handleFormData(submitQuipSchema, async (parse) => {
     return { errors };
   }
 
-  const { text, gameId } = data;
+  const { text, playerId: pid, promptId } = data;
 
-  const playerId = cookies().get("player-id")?.value;
-  if (!playerId) {
+  const playerId = Number(cookies().get("player-id")?.value);
+  const { id, game_id } = (
+    await sql`SELECT * FROM players WHERE id = ${playerId}`
+  ).rows[0] as { game_id: number; id: number };
+  if (!playerId || playerId != pid || id != playerId) {
+    console.error("Not logged in", playerId, pid, id);
     return {
       errors: { other: "Not logged in" },
     };
   }
 
-  await sql`INSERT INTO submissions (content, game_id, player_id) VALUES (${text}, ${gameId}, ${playerId})`;
-  revalidatePath(`/games/${gameId}`);
+  await sql`UPDATE submissions set content = ${text} WHERE player_id = ${playerId} AND prompt_id = ${promptId}`;
+  revalidatePath(`/games/${game_id}`);
+  redirect(`/games/${game_id}`);
 });
 
-export async function startGame(gameId: string) {
+const MIN_PLAYERS = 2;
+const startGameSchema = z.object({
+  gameId: z.number({ coerce: true }).int().gte(0),
+});
+export const startGame = handleFormData(startGameSchema, async (parse) => {
+  const { data, errors } = parse();
+  if (errors) {
+    return { errors };
+  }
+  const { gameId } = data;
   const gameExists =
     (await sql`SELECT * FROM games WHERE id = ${gameId}`).rowCount === 1;
   if (!gameExists) {
     console.error("Game does not exist");
-    return;
+    return { errors: { other: "Game does not exist" } };
   }
-
-  const players =
-    await sql`SELECT * FROM game_players WHERE game_id = ${gameId}`;
+  // TODO check that player is in game
+  const players = await sql`SELECT * FROM players WHERE game_id = ${gameId}`;
   const playerCount = players.rowCount;
-  if (playerCount < 3) {
+  if (playerCount < MIN_PLAYERS) {
     console.error("Not enough players");
-    return;
+    return { errors: { other: "Not enough players" } };
   }
-  const submissions =
-    await sql`SELECT * FROM submissions WHERE game_id = ${gameId}`;
+  const submissions = await sql`SELECT * FROM submissions
+    INNER JOIN players ON submissions.player_id = players.id
+    WHERE game_id = ${gameId}`;
   if (submissions.rowCount > 0) {
     console.error("Game already started");
-    return;
+    // TODO if user is in game, redirect to game page
+    return { errors: { other: "Game already started" } };
   }
 
   await sql`
   WITH matched_player_1 AS (
     SELECT
-        player_id,
-        (ROW_NUMBER() OVER (ORDER BY player_id)-1) AS round
+        players.id as player_id,
+        (ROW_NUMBER() OVER (ORDER BY players.id)-1) AS round
     FROM
-        game_players
+        players
     WHERE game_id = ${gameId}
 ), matched_player_2 AS (
     SELECT
-        player_id,
-        (ROW_NUMBER() OVER (ORDER BY player_id) % ( COUNT(*) OVER ())) AS round
+        players.id as player_id,
+        (ROW_NUMBER() OVER (ORDER BY players.id) % ( COUNT(*) OVER ())) AS round
 
     FROM
-        game_players
+        players
     WHERE game_id = ${gameId}
 ), random_prompts AS (
     SELECT
@@ -160,16 +190,15 @@ export async function startGame(gameId: string) {
     SELECT *
     FROM matched_player_2
 )
-INSERT INTO submissions (game_id, player_id, prompt_id) (
+INSERT INTO submissions (player_id, prompt_id) (
     SELECT
-        ${gameId} as game_id,
         player_id,
         random_prompts.id as prompt_id
     FROM player_matches
     LEFT JOIN random_prompts ON player_matches.round = random_prompts.round
 );`;
   revalidatePath(`/games/${gameId}`);
-}
+});
 
 export async function inputAnswer(roundId: number) {
   const user = cookies().get("player-id")?.value;

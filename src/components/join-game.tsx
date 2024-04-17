@@ -37,3 +37,16 @@ export const JoinGameForm = ({ gameId }: { gameId: string }) => {
     </form>
   );
 };
+
+export const CopyGameLinkButton = ({ gameId }: { gameId: string }) => {
+  return (
+    <Button
+      variant={"secondary"}
+      onClick={() => {
+        navigator.clipboard.writeText(`${window.location.href}`);
+      }}
+    >
+      Copy Game Link
+    </Button>
+  );
+};
