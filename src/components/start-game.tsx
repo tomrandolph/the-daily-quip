@@ -1,7 +1,6 @@
 "use client";
 import { startGame } from "@/actions/game";
 import { Button } from "./ui/button";
-import { useState } from "react";
 import { useFormState } from "react-dom";
 
 export function StartGameButton({ gameId }: { gameId: number }) {

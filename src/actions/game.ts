@@ -35,7 +35,7 @@ export const createGame = handleFormData(gameSchema, async (parse) => {
   ).rows[0] as { id: string };
   // TODO ensure player does not leave games stranded
   cookies().delete(COOKIE_NAME);
-
+  console.log("redirecting to", res.id);
   redirect(`/games/${res.id}`);
 });
 
@@ -51,41 +51,32 @@ const joinGameSchema = z.object({
 });
 
 export const joinGame = handleFormData(joinGameSchema, async (parse) => {
-  const { data, errors } = parse();
-  console.log("data", data, "errors", errors);
+  const { data: sensitiveData, errors } = parse();
+  console.log("errors", errors);
   if (errors) {
     return { errors };
   }
+  type Game = {
+    id: number;
+    password: string;
+    salt: string;
+  };
 
-  const gameStarted =
-    (
-      await sql`SELECT *
-      FROM submissions
-      INNER JOIN players ON submissions.player_id = players.id
-      WHERE game_id = ${data.gameId}`
-    ).rowCount > 0;
-  if (gameStarted) {
-    console.error("Game already started");
-    return { errors: { other: "Game already started" } };
-  }
+  const res = await sql<Game>`SELECT games.*
+      FROM games
+      LEFT JOIN players ON players.game_id = games.id
+      LEFT JOIN submissions ON submissions.player_id = players.id
+      WHERE games.id = ${sensitiveData.gameId}`;
 
-  const { password, name, gameId } = data;
-
-  const game = (await sql`SELECT * FROM games WHERE id = ${gameId}`).rows[0] as
-    | { id: string; salt: string; password: string }
-    | undefined;
-  if (!game) {
-    return {
-      errors: { other: "Game not found or invalid password" },
-    };
-  }
+  const gameStarted = res.rowCount > 1;
+  const game: Game | undefined = res.rows[0];
+  const { password, name, gameId } = sensitiveData;
 
   const isValid = await bcrypt.compare(password, game.password);
 
-  if (!isValid) {
-    return {
-      errors: { other: "Game not found or invalid password" }, // TODO can we just 404 instead?
-    };
+  if (gameStarted || !game || !isValid) {
+    console.error("Game invite expired or invalid");
+    return { errors: { other: "Game invite expired or invalid" } };
   }
 
   const player = (
@@ -122,12 +113,13 @@ export const submitQuip = handleFormData(submitQuipSchema, async (parse) => {
 
   const { text, promptId } = data;
 
-  const { game_id } = (await sql`SELECT * FROM players WHERE id = ${playerId}`)
-    .rows[0] as { game_id: number };
-
-  await sql`UPDATE submissions set content = ${text} WHERE player_id = ${playerId} AND prompt_id = ${promptId}`;
-  revalidatePath(`/games/${game_id}`);
-  redirect(`/games/${game_id}`);
+  const res = await sql<{
+    game_id: number;
+  }>`UPDATE submissions set content = ${text} WHERE player_id = ${playerId} AND prompt_id = ${promptId}
+  RETURNING (SELECT game_id FROM players WHERE id = ${playerId})`;
+  const gameId = res.rows[0].game_id;
+  revalidatePath(`/games/${gameId}`);
+  redirect(`/games/${gameId}`);
 });
 
 const MIN_PLAYERS = 2;

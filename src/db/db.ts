@@ -1,7 +1,7 @@
 import type { QueryResult, QueryResultRow } from "pg";
 import { Client } from "pg";
 import { createClient } from "@vercel/postgres";
-import knex from "knex";
+
 function* incrementGenerator() {
   let count = 1;
   while (true) {
@@ -37,7 +37,12 @@ export const customSQL: (
   clientOrFactory: (() => ClientLike) | ClientLike
 ) => SqlFunction =
   (clientOrFactory) =>
-  async (textFragments, ...values) => {
+  async <Result extends QueryResultRow>(
+    textFragments: TemplateStringsArray,
+    ...values: Array<Primitive | Primitive[] | TableName>
+  ) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
     const decorator =
       typeof clientOrFactory === "function"
         ? async (cb: (c: ClientLike) => Promise<QueryResult>) => {
@@ -85,7 +90,7 @@ export const customSQL: (
     const query = queryFragments.join(" ");
     console.log("query", query, "values", finalValues);
     const result = await decorator(async (client) =>
-      client.query(query, finalValues)
+      client.query<Result, unknown>(query, finalValues)
     );
 
     return result;
