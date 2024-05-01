@@ -118,30 +118,4 @@ if (!process.env.VERCEL_ENV || process.env.VERCEL_ENV === "development") {
   sql = customSQL(client);
 }
 
-// const db = knex({
-//   client: "pg",
-//   connection: process.env.POSTGRES_URL,
-// });
-declare module "knex/types/tables" {
-  interface Tables {
-    rounds: {
-      game_id: string;
-      prompt_id: number;
-      user_1_id: string;
-      user_2_id: string;
-      user_1_submission_id: string;
-      user_2_submission_id: string;
-    };
-    game_players: {
-      game_id: string;
-      player_id: string;
-      joined_at: Date;
-    };
-    prompts: {
-      id: number;
-      content: string;
-    };
-  }
-}
-
 export { sql };
