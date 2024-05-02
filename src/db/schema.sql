@@ -23,9 +23,11 @@ CREATE TABLE IF NOT EXISTS prompts (
 CREATE TABLE IF NOT EXISTS submissions (
   prompt_id INTEGER NOT NULL REFERENCES prompts(id),
   player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  match_number INTEGER NOT NULL,
   content TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (prompt_id, player_id)
+  PRIMARY KEY (prompt_id, player_id),
+  UNIQUE (player_id, match_number)
 );
 
 COMMIT;

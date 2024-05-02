@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { COOKIE_NAME, auth, issueJWT } from "@/lib/auth";
+import * as game from "@/data/game";
 
 const gameSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters long"),
@@ -122,7 +123,6 @@ export const submitQuip = handleFormData(submitQuipSchema, async (parse) => {
   redirect(`/games/${gameId}`);
 });
 
-const MIN_PLAYERS = 2;
 const startGameSchema = z.object({
   gameId: z.number({ coerce: true }).int().gte(0),
 });
@@ -140,70 +140,8 @@ export const startGame = handleFormData(startGameSchema, async (parse) => {
   }
   const { gameId } = data;
   console.time("findgame");
-
-  const gameExists =
-    (await sql`SELECT * FROM games WHERE id = ${gameId}`).rowCount === 1;
-  if (!gameExists) {
-    console.error("Game does not exist");
-    return { errors: { other: "Game does not exist" } };
+  const { error: startError } = await game.startGame(playerId, gameId);
+  if (startError) {
+    return { errors: { other: startError } };
   }
-  console.timeEnd("findgame");
-  // TODO check that player is in game
-  console.time("players");
-  const players = await sql`SELECT * FROM players WHERE game_id = ${gameId}`;
-  const playerCount = players.rowCount;
-  if (playerCount < MIN_PLAYERS) {
-    console.error("Not enough players");
-    return { errors: { other: "Not enough players" } };
-  }
-  console.timeEnd("players");
-  console.time("submissions");
-  const submissions = await sql`SELECT * FROM submissions
-    INNER JOIN players ON submissions.player_id = players.id
-    WHERE game_id = ${gameId}`;
-  if (submissions.rowCount > 0) {
-    console.error("Game already started");
-    // TODO if user is in game, redirect to game page
-    return { errors: { other: "Game already started" } };
-  }
-  console.timeEnd("submissions");
-  console.time("insert");
-  await sql`
-  WITH matched_player_1 AS (
-    SELECT
-        players.id as player_id,
-        (ROW_NUMBER() OVER (ORDER BY players.id)-1) AS round
-    FROM
-        players
-    WHERE game_id = ${gameId}
-), matched_player_2 AS (
-    SELECT
-        players.id as player_id,
-        (ROW_NUMBER() OVER (ORDER BY players.id) % ( COUNT(*) OVER ())) AS round
-
-    FROM
-        players
-    WHERE game_id = ${gameId}
-), random_prompts AS (
-    SELECT
-        id,
-        (ROW_NUMBER() OVER (ORDER BY RANDOM())-1) AS round
-    FROM
-        prompts
-), player_matches AS (
-    SELECT *
-    FROM matched_player_1
-    UNION
-    SELECT *
-    FROM matched_player_2
-)
-INSERT INTO submissions (player_id, prompt_id) (
-    SELECT
-        player_id,
-        random_prompts.id as prompt_id
-    FROM player_matches
-    LEFT JOIN random_prompts ON player_matches.round = random_prompts.round
-);`;
-  console.timeEnd("insert");
-  revalidatePath(`/games/${gameId}`);
 });

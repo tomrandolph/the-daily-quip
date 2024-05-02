@@ -41,20 +41,19 @@ export const customSQL: (
     textFragments: TemplateStringsArray,
     ...values: Array<Primitive | Primitive[] | TableName>
   ) => {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
     const decorator =
       typeof clientOrFactory === "function"
         ? async (cb: (c: ClientLike) => Promise<QueryResult>) => {
             const client = clientOrFactory();
 
             await client.connect();
+            try {
+              const result = await cb(client);
 
-            const result = await cb(client);
-
-            await client.end();
-
-            return result;
+              return result;
+            } finally {
+              await client.end();
+            }
           }
         : (cb: (c: ClientLike) => Promise<QueryResult>) => cb(clientOrFactory);
 
@@ -88,7 +87,7 @@ export const customSQL: (
     });
 
     const query = queryFragments.join(" ");
-    console.log("query", query, "values", finalValues);
+    // console.log("query", query, "values", finalValues);
     const result = await decorator(async (client) =>
       client.query<Result, unknown>(query, finalValues)
     );
@@ -103,19 +102,13 @@ type SqlFunction = <O extends QueryResultRow>(
 
 let sql: SqlFunction = customSQL(createClient);
 
-declare const global: { __postgresSqlClient?: Client };
-
 if (!process.env.VERCEL_ENV || process.env.VERCEL_ENV === "development") {
-  if (!global.__postgresSqlClient) {
-    const client = new Client({
+  const createClient = () =>
+    new Client({
       connectionString: process.env.POSTGRES_URL,
     });
-    client.connect();
-    global.__postgresSqlClient = client;
-  }
-  const client = global.__postgresSqlClient;
 
-  sql = customSQL(client);
+  sql = customSQL(createClient);
 }
 
 export { sql };

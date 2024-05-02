@@ -27,14 +27,20 @@ export default async function Page({ params }: { params: { gameId: number } }) {
             </>
           </div>
         ) : (
-          <AuthorizedGame playerId={playerId} />
+          <AuthorizedGame playerId={playerId} gameId={params.gameId} />
         )}
       </Suspense>
     </main>
   );
 }
 
-async function AuthorizedGame({ playerId }: { playerId: number }) {
+async function AuthorizedGame({
+  playerId,
+  gameId,
+}: {
+  playerId: number;
+  gameId: number;
+}) {
   type Submission = {
     prompt_id: number;
     player_id: number;
@@ -77,10 +83,10 @@ async function AuthorizedGame({ playerId }: { playerId: number }) {
     : STATES.NOT_STARTED;
 
   const game = {
-    [STATES.NOT_STARTED]: () => <StartGameButton gameId={info.game_id} />,
+    [STATES.NOT_STARTED]: () => <StartGameButton gameId={gameId} />,
     [STATES.PLAYER_PLAYING]: () => <PlayQuip submission={nextSubmission!} />,
     [STATES.PLAYER_DONE]: () => (
-      <Link href={`/games/${info.game_id}`}>
+      <Link href={`/games/${gameId}`}>
         You completed your prompts. Click here to check out the other
         submissions
         {/* TODO does this work */}
