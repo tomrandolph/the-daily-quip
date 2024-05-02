@@ -144,4 +144,5 @@ export const startGame = handleFormData(startGameSchema, async (parse) => {
   if (startError) {
     return { errors: { other: startError } };
   }
+  revalidatePath(`/games/${gameId}`);
 });

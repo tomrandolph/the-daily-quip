@@ -48,8 +48,8 @@ function addEmptySubmissionToGame(gameId: number, playerId: number) {
     SELECT
         id,
         (ROW_NUMBER() OVER (ORDER BY RANDOM())-1) AS round
-    FROM
-        prompts
+    FROM prompts
+    WHERE adult = false
 ), player_matches AS (
     SELECT *, 1 as match_number
     FROM matched_player_1
