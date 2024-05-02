@@ -66,3 +66,68 @@ INSERT INTO submissions (player_id, prompt_id, match_number) (
     LEFT JOIN random_prompts ON player_matches.round = random_prompts.round
 );`;
 }
+type Submission = {
+  prompt_id: number;
+  player_id: number;
+  prompt_content: string;
+  game_id: number;
+  content: string | null;
+};
+export const STATES = {
+  NOT_STARTED: "NOT_STARTED",
+  PLAYER_PLAYING: "PLAYER_PLAYING",
+  PLAYER_DONE: "PLAYER_DONE",
+  COMPLETED: "COMPLETED",
+} as const;
+
+export async function getGameState(gameId: number, playerId: number) {
+  const allSubmissions =
+    await sql<Submission>`SELECT submissions.*, prompts.id as prompt_id, prompts.content as prompt_content, players.game_id
+  FROM submissions
+  LEFT JOIN prompts on prompt_id = prompts.id
+  INNER JOIN players ON submissions.player_id = players.id
+  WHERE game_id =  (SELECT game_id FROM players where players.id = ${playerId})
+  AND game_id = ${gameId}`;
+  const gameStarted = allSubmissions.rowCount > 0;
+  const gameCompleted =
+    allSubmissions.rows.every((row) => row.content) && gameStarted;
+
+  const nextSubmission = allSubmissions.rows.find(
+    (row) => row.player_id === playerId && !row.content
+  );
+
+  const state = gameCompleted
+    ? STATES.COMPLETED
+    : gameStarted
+    ? nextSubmission
+      ? STATES.PLAYER_PLAYING
+      : STATES.PLAYER_DONE
+    : STATES.NOT_STARTED;
+  return { state, nextSubmission };
+}
+function first<T>(arr: T[]): T | undefined {
+  return arr[0];
+}
+
+function firstRow<T>(result: { rows: T[] }): T | undefined {
+  return first(result.rows);
+}
+export async function getCurrentGame(playerId: number | undefined | null) {
+  if (!playerId) {
+    return { gameId: undefined };
+  }
+  const currentGame = firstRow(
+    await sql<{
+      game_id: number;
+    }>`SELECT game_id FROM players WHERE id = ${playerId}`
+  );
+  return { gameId: currentGame?.game_id };
+}
+
+export async function getPlayersInGame(gameId: number, playerId: number) {
+  const res = await sql<{ name: string }>`SELECT players.name
+  FROM players
+  WHERE players.game_id = (SELECT game_id FROM players WHERE id = ${playerId})
+  AND players.game_id = ${gameId}`;
+  return res.rows;
+}

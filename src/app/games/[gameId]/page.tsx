@@ -4,11 +4,13 @@ import { SumissionList } from "@/components/list-submissions";
 import { StartGameButton } from "@/components/start-game";
 import { SubmitQuipForm } from "@/components/submit-quip";
 import { Button } from "@/components/ui/button";
-import { sql } from "@/db/db";
+import { STATES, getGameState } from "@/data/game";
+// import { sql } from "@/db/db";
 import { auth } from "@/lib/auth";
 import _ from "lodash";
 import Link from "next/link";
 import { Suspense } from "react";
+import * as game from "@/data/game";
 
 export default async function Page({ params }: { params: { gameId: number } }) {
   const playerId = await auth();
@@ -16,10 +18,14 @@ export default async function Page({ params }: { params: { gameId: number } }) {
     console.error("no player id");
   }
 
+  const currentGame = await game.getCurrentGame(playerId);
+
+  const playerInThisGame = currentGame.gameId == params.gameId;
+
   return (
     <main className="px-8 flex flex-col gap-2">
       <Suspense>
-        {!playerId ? (
+        {!playerInThisGame || !playerId ? (
           <div className="flex flex-col gap-8 w-full">
             <>
               <p>Join the game</p>
@@ -41,46 +47,7 @@ async function AuthorizedGame({
   playerId: number;
   gameId: number;
 }) {
-  type Submission = {
-    prompt_id: number;
-    player_id: number;
-    prompt_content: string;
-    game_id: number;
-    content: string | null;
-  };
-  const allSubmissions =
-    await sql<Submission>`SELECT submissions.*, prompts.id as prompt_id, prompts.content as prompt_content, players.game_id
-  FROM submissions
-  LEFT JOIN prompts on prompt_id = prompts.id
-  INNER JOIN players ON submissions.player_id = players.id
-  WHERE game_id =  (SELECT game_id FROM players where players.id = ${playerId})`;
-  const gameStarted = allSubmissions.rowCount > 0;
-  const gameCompleted =
-    allSubmissions.rows.every((row) => row.content) && gameStarted;
-
-  const nextSubmission = allSubmissions.rows.find(
-    (row) => row.player_id === playerId && !row.content
-  );
-  console.log("game start", gameStarted);
-  console.log("game completed", gameCompleted);
-  console.log("Submission");
-  console.log(allSubmissions.rows);
-  console.log(nextSubmission);
-
-  const STATES = {
-    NOT_STARTED: "NOT_STARTED",
-    PLAYER_PLAYING: "PLAYER_PLAYING",
-    PLAYER_DONE: "PLAYER_DONE",
-    COMPLETED: "COMPLETED",
-  } as const;
-
-  const STATE = gameCompleted
-    ? STATES.COMPLETED
-    : gameStarted
-    ? nextSubmission
-      ? STATES.PLAYER_PLAYING
-      : STATES.PLAYER_DONE
-    : STATES.NOT_STARTED;
+  const { nextSubmission, state } = await getGameState(gameId, playerId);
 
   const game = {
     [STATES.NOT_STARTED]: () => <StartGameButton gameId={gameId} />,
@@ -101,12 +68,12 @@ async function AuthorizedGame({
       </>
     ),
   } as const;
-  const Game = game[STATE];
+  const Game = game[state];
   return (
     <div className="flex flex-col justify-center w-full">
       <div className="flex justify-between">
-        <GamePlayersList playerId={playerId} />
-        {STATE === STATES.NOT_STARTED && <CopyGameLinkButton />}
+        <GamePlayersList playerId={playerId} gameId={gameId} />
+        {state === STATES.NOT_STARTED && <CopyGameLinkButton />}
       </div>
       <Game />
     </div>
@@ -129,15 +96,18 @@ async function PlayQuip({ submission }: { submission: Submission }) {
   );
 }
 
-async function GamePlayersList({ playerId }: { playerId: number }) {
-  const res = await sql`SELECT players.name
-  FROM players
-  WHERE players.game_id = (SELECT game_id FROM players WHERE id = ${playerId})`;
-
+async function GamePlayersList({
+  playerId,
+  gameId,
+}: {
+  playerId: number;
+  gameId: number;
+}) {
+  const players = await game.getPlayersInGame(gameId, playerId);
   return (
     <ul className="flex gap-2">
-      {res.rows.map((row) => (
-        <li key={row.name}>{row.name}</li>
+      {players.map((player) => (
+        <li key={player.name}>{player.name}</li>
       ))}
     </ul>
   );
