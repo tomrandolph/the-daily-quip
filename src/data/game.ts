@@ -74,12 +74,6 @@ export type Submission<Content extends string | null = string | null> = {
   game_id: number;
   content: Content;
 };
-export const STATES = {
-  NOT_STARTED: "NOT_STARTED",
-  PLAYER_PLAYING: "PLAYER_PLAYING",
-  PLAYER_DONE: "PLAYER_DONE",
-  COMPLETED: "COMPLETED",
-} as const;
 
 export type PossibleStates =
   | {
