@@ -1,10 +1,14 @@
 "use client";
 import { useDecryption } from "@/hooks/use-crypto";
 import _ from "lodash";
-export const SumissionList = ({
+export const SubmissionList = ({
   submissions,
 }: {
-  submissions: { name: string; content: string; prompt_content: string }[];
+  submissions: {
+    player_name: string;
+    content: string;
+    prompt_content: string;
+  }[];
 }) => {
   console.log(_.groupBy(submissions, "prompt_content"));
   return (
@@ -17,7 +21,7 @@ export const SumissionList = ({
               <h2 className="font-bold text-lg">{prompt}</h2>
               {submissions.map((submission, i) => (
                 <div className="flex gap-2" key={i}>
-                  <p className="font-bold">{submission.name}:</p>
+                  <p className="font-bold">{submission.player_name}:</p>
                   <DecryptedMessage message={submission.content} />
                 </div>
               ))}

@@ -66,12 +66,13 @@ INSERT INTO submissions (player_id, prompt_id, match_number) (
     LEFT JOIN random_prompts ON player_matches.round = random_prompts.round
 );`;
 }
-type Submission = {
+export type Submission<Content extends string | null = string | null> = {
   prompt_id: number;
   player_id: number;
+  player_name: string;
   prompt_content: string;
   game_id: number;
-  content: string | null;
+  content: Content;
 };
 export const STATES = {
   NOT_STARTED: "NOT_STARTED",
@@ -80,9 +81,33 @@ export const STATES = {
   COMPLETED: "COMPLETED",
 } as const;
 
-export async function getGameState(gameId: number, playerId: number) {
+type PossibleStates =
+  | {
+      state: "NOT_STARTED";
+      nextSubmission: undefined;
+      allSubmissions: Submission<null>[];
+    }
+  | {
+      state: "PLAYER_PLAYING";
+      nextSubmission: Submission<null>;
+      allSubmissions: Submission<string | null>[];
+    }
+  | {
+      state: "PLAYER_DONE";
+      nextSubmission: undefined;
+      allSubmissions: Submission<string | null>[];
+    }
+  | {
+      state: "COMPLETED";
+      nextSubmission: undefined;
+      allSubmissions: Submission<string>[];
+    };
+export async function getGameState(
+  gameId: number,
+  playerId: number
+): Promise<PossibleStates> {
   const allSubmissions =
-    await sql<Submission>`SELECT submissions.*, prompts.id as prompt_id, prompts.content as prompt_content, players.game_id
+    await sql<Submission>`SELECT submissions.*, prompts.id as prompt_id, prompts.content as prompt_content, players.game_id, players.name as player_name
   FROM submissions
   LEFT JOIN prompts on prompt_id = prompts.id
   INNER JOIN players ON submissions.player_id = players.id
@@ -103,7 +128,7 @@ export async function getGameState(gameId: number, playerId: number) {
       ? STATES.PLAYER_PLAYING
       : STATES.PLAYER_DONE
     : STATES.NOT_STARTED;
-  return { state, nextSubmission };
+  return { state, nextSubmission, allSubmissions: allSubmissions.rows };
 }
 function first<T>(arr: T[]): T | undefined {
   return arr[0];

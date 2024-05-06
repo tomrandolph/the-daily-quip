@@ -13,8 +13,6 @@ const gameSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters long"),
 });
 
-// ...
-
 export const createGame = handleFormData(gameSchema, async (parse) => {
   const { data, errors } = parse();
 
@@ -40,7 +38,7 @@ export const createGame = handleFormData(gameSchema, async (parse) => {
   redirect(`/games/${res.id}`);
 });
 
-// TODO create a new game with salted hash of password
+// create a new game with salted hash of password
 // to join game, user must provide password
 // if password is correct, user is added to game
 // password is imported to the client to be used to encrypt/decrypt game data

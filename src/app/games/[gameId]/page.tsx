@@ -1,15 +1,13 @@
-import { startGame } from "@/actions/game";
+import { Suspense } from "react";
+import _ from "lodash";
+import Link from "next/link";
 import { CopyGameLinkButton, JoinGameForm } from "@/components/join-game";
-import { SumissionList } from "@/components/list-submissions";
+import { SubmissionList } from "@/components/list-submissions";
 import { StartGameButton } from "@/components/start-game";
 import { SubmitQuipForm } from "@/components/submit-quip";
 import { Button } from "@/components/ui/button";
-import { STATES, getGameState } from "@/data/game";
-// import { sql } from "@/db/db";
+import type { PossibleStates, Submission } from "@/data/game";
 import { auth } from "@/lib/auth";
-import _ from "lodash";
-import Link from "next/link";
-import { Suspense } from "react";
 import * as game from "@/data/game";
 
 export default async function Page({ params }: { params: { gameId: number } }) {
@@ -40,6 +38,32 @@ export default async function Page({ params }: { params: { gameId: number } }) {
   );
 }
 
+function Game({ gameId, game }: { gameId: number; game: PossibleStates }) {
+  switch (game.state) {
+    case "NOT_STARTED":
+      return <StartGameButton gameId={gameId} />;
+    case "PLAYER_PLAYING":
+      return <PlayQuip submission={game.nextSubmission} />;
+    case "PLAYER_DONE":
+      return (
+        <Link href={`/games/${gameId}`}>
+          You completed your prompts. Click here to check out the other
+          submissions
+          {/* TODO does this work */}
+        </Link>
+      );
+    case "COMPLETED":
+      return (
+        <>
+          <SubmissionList submissions={game.allSubmissions} />
+          <Link href="/new-game">
+            <Button>New Game</Button>
+          </Link>
+        </>
+      );
+  }
+}
+
 async function AuthorizedGame({
   playerId,
   gameId,
@@ -47,46 +71,20 @@ async function AuthorizedGame({
   playerId: number;
   gameId: number;
 }) {
-  const { nextSubmission, state } = await getGameState(gameId, playerId);
+  const gameState = await game.getGameState(gameId, playerId);
 
-  const game = {
-    [STATES.NOT_STARTED]: () => <StartGameButton gameId={gameId} />,
-    [STATES.PLAYER_PLAYING]: () => <PlayQuip submission={nextSubmission!} />,
-    [STATES.PLAYER_DONE]: () => (
-      <Link href={`/games/${gameId}`}>
-        You completed your prompts. Click here to check out the other
-        submissions
-        {/* TODO does this work */}
-      </Link>
-    ),
-    [STATES.COMPLETED]: () => (
-      <>
-        <Submissions playerId={playerId} />
-        <Link href="/new-game">
-          <Button>New Game</Button>
-        </Link>
-      </>
-    ),
-  } as const;
-  const Game = game[state];
   return (
     <div className="flex flex-col justify-center w-full">
       <div className="flex justify-between">
         <GamePlayersList playerId={playerId} gameId={gameId} />
-        {state === STATES.NOT_STARTED && <CopyGameLinkButton />}
+        {gameState.state === "NOT_STARTED" && <CopyGameLinkButton />}
       </div>
-      <Game />
+      <Game gameId={gameId} game={gameState} />
     </div>
   );
 }
 
-type Submission = {
-  content: string | null;
-  prompt_content: string;
-  prompt_id: number;
-  player_id: number;
-};
-async function PlayQuip({ submission }: { submission: Submission }) {
+async function PlayQuip({ submission }: { submission: Submission<null> }) {
   console.log(submission);
   return (
     <div>
@@ -111,16 +109,4 @@ async function GamePlayersList({
       ))}
     </ul>
   );
-}
-
-async function Submissions({ playerId }: { playerId: number }) {
-  const res = (
-    await sql`SELECT players.name, submissions.content, prompts.content as prompt_content
-  FROM players
-  INNER JOIN submissions ON players.id = submissions.player_id
-  INNER JOIN prompts ON submissions.prompt_id = prompts.id
-  WHERE players.game_id = (SELECT game_id FROM players WHERE id = ${playerId})`
-  ).rows as { name: string; content: string; prompt_content: string }[];
-  console.log(res);
-  return <SumissionList submissions={res} />;
 }
