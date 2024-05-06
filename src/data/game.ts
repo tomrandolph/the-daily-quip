@@ -84,22 +84,16 @@ export const STATES = {
 export type PossibleStates =
   | {
       state: "NOT_STARTED";
-      nextSubmission: undefined;
-      allSubmissions: Submission<null>[];
     }
   | {
       state: "PLAYER_PLAYING";
-      nextSubmission: Submission<null>;
-      allSubmissions: Submission<string | null>[];
+      nextSubmission: Submission;
     }
   | {
       state: "PLAYER_DONE";
-      nextSubmission: undefined;
-      allSubmissions: Submission<string | null>[];
     }
   | {
       state: "COMPLETED";
-      nextSubmission: undefined;
       allSubmissions: Submission<string>[];
     };
 export async function getGameState(
@@ -121,14 +115,26 @@ export async function getGameState(
     (row) => row.player_id === playerId && !row.content
   );
 
-  const state = gameCompleted
-    ? STATES.COMPLETED
-    : gameStarted
-    ? nextSubmission
-      ? STATES.PLAYER_PLAYING
-      : STATES.PLAYER_DONE
-    : STATES.NOT_STARTED;
-  return { state, nextSubmission, allSubmissions: allSubmissions.rows };
+  if (gameCompleted) {
+    return {
+      state: "COMPLETED",
+      allSubmissions: allSubmissions.rows as Submission<string>[],
+    };
+  }
+  if (gameStarted) {
+    if (nextSubmission) {
+      return {
+        state: "PLAYER_PLAYING",
+        nextSubmission,
+      };
+    }
+    return {
+      state: "PLAYER_DONE",
+    };
+  }
+  return {
+    state: "NOT_STARTED",
+  };
 }
 function first<T>(arr: T[]): T | undefined {
   return arr[0];

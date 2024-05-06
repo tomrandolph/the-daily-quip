@@ -84,7 +84,7 @@ async function AuthorizedGame({
   );
 }
 
-async function PlayQuip({ submission }: { submission: Submission<null> }) {
+async function PlayQuip({ submission }: { submission: Submission }) {
   console.log(submission);
   return (
     <div>
