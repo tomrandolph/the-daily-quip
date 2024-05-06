@@ -81,7 +81,7 @@ export const STATES = {
   COMPLETED: "COMPLETED",
 } as const;
 
-type PossibleStates =
+export type PossibleStates =
   | {
       state: "NOT_STARTED";
       nextSubmission: undefined;
